@@ -1,7 +1,7 @@
 # Render setup for COURTSIDE (game + multiplayer server in one web service)
 services:
   - type: web
-    name: courtside
+    name: Courtside
     runtime: node
     plan: free
     buildCommand: npm install --include=dev && npm run build
