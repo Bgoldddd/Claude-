@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-offline
+server/data
+*.tmp
+blender/out/*.blend1
+.DS_Store
+# old copies (not part of the project)
+courtside.zip
+courtside
+courtside 2
+courtside 3
+courtside 4

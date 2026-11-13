@@ -1,0 +1,39 @@
+{
+  "name": "courtside",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:client": "vite",
+    "dev:server": "tsx watch server/index.ts",
+    "server": "tsx server/index.ts",
+    "build": "vite build",
+    "start": "npm run build && tsx server/index.ts --serve-client",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx tests/run.ts",
+    "test:server": "tsx tests/server.ts"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "^0.18.10",
+    "colyseus": "^0.18.12",
+    "express": "^5.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.187.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

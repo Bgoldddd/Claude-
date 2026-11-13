@@ -1,0 +1,12 @@
+# Render setup for COURTSIDE (game + multiplayer server in one web service)
+services:
+  - type: web
+    name: courtside
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npx tsx server/index.ts --serve-client
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
