@@ -557,6 +557,14 @@ export class Engine {
     pos.y = Math.max(0.55, pos.y + 0.35);
     pos.x = Math.max(-FENCE.x + 0.4, Math.min(FENCE.x + 2.5, pos.x));
     pos.z = Math.max(-FENCE.z + 0.4, Math.min(FENCE.z - 0.4, pos.z));
+    // don't let the hoop (backboard, pole, arm) block the view: pull the camera in front of it
+    const eye = tmp2.set(this.camTarget.x, this.camTarget.y + 0.35, this.camTarget.z);
+    const hit = cameraBlock(eye, pos);
+    if (hit < 1) {
+      const t = Math.max(0, hit - 0.12 / Math.max(0.01, eye.distanceTo(pos)));
+      pos.lerpVectors(eye, pos, t);
+      if (eye.distanceTo(pos) < 1.4) { pos.copy(eye).addScaledVector(dir, -1.4); pos.y = Math.max(pos.y, eye.y + 0.6); }
+    }
     this.camera.lookAt(tmp2.copy(this.camTarget).addScaledVector(dir, 3).addScaledVector(right, 0.45));
   }
 
@@ -668,6 +676,34 @@ export class Engine {
       fps: this.fps,
     };
   }
+}
+
+// Hoop parts the camera must not look through (both ends of the court), as boxes with a little padding.
+const HOOP_BOXES: [number, number, number, number, number, number][] = [];
+for (const sx of [1, -1]) {
+  const box = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) => HOOP_BOXES.push([Math.min(x0 * sx, x1 * sx), Math.max(x0 * sx, x1 * sx), y0, y1, z0, z1]);
+  box(HOOP.boardX - 0.1, HOOP.boardX + 0.15, HOOP.boardBottom - 0.1, HOOP.boardTop + 0.1, -HOOP.boardHalfW - 0.1, HOOP.boardHalfW + 0.1); // backboard
+  box(HOOP.poleX - 0.3, HOOP.poleX + 0.3, 0, 4.0, -0.3, 0.3); // pole
+  box(HOOP.boardX, HOOP.poleX, 3.3, 4.0, -0.2, 0.2); // arm
+}
+
+/** Fraction (0..1) along eye→cam where the first hoop box is hit; 1 = clear. */
+export function cameraBlock(eye: THREE.Vector3, cam: THREE.Vector3): number {
+  const d = [cam.x - eye.x, cam.y - eye.y, cam.z - eye.z], o = [eye.x, eye.y, eye.z];
+  let best = 1;
+  for (const b of HOOP_BOXES) {
+    let t0 = 0, t1 = 1, ok = true;
+    for (let k = 0; k < 3 && ok; k++) {
+      const lo = b[k * 2], hi = b[k * 2 + 1];
+      if (Math.abs(d[k]) < 1e-9) { if (o[k] < lo || o[k] > hi) ok = false; continue; }
+      let a = (lo - o[k]) / d[k], c = (hi - o[k]) / d[k];
+      if (a > c) [a, c] = [c, a];
+      t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+      if (t0 > t1) ok = false;
+    }
+    if (ok && t0 > 0 && t0 < best) best = t0;
+  }
+  return best;
 }
 
 export function contestColor(c: number) {
