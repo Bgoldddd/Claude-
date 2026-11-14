@@ -62,10 +62,10 @@ export class CourtRoom extends Room {
     });
     this.onMessage("settings", (c: Client, m: any) => {
       if (c.sessionId !== this.hostSid || this.phase !== "lobby" || this.visibility === "public") return;
-      if (MODES.includes(m?.mode) && m.mode !== "shootout" && m.mode !== "dunk") this.settings.mode = m.mode;
+      if (MODES.includes(m?.mode) && m.mode !== "shootout" && m.mode !== "dunk" && m.mode !== this.settings.mode) { this.settings.mode = m.mode; this.settings.target = m.mode === "1v1" ? 11 : 16; }
       if (m?.rule === "losers" || m?.rule === "winners") this.settings.rule = m.rule;
       if (["rookie", "pro", "legend"].includes(m?.difficulty)) this.settings.difficulty = m.difficulty;
-      if ([7, 11, 15, 21].includes(m?.target)) this.settings.target = m.target;
+      if ([7, 11, 15, 16, 21].includes(m?.target)) this.settings.target = m.target;
       if ([0, 300, 600, 900].includes(m?.timeLimit)) this.settings.timeLimit = m.timeLimit;
       if (typeof m?.fillBots === "boolean") this.fillBots = m.fillBots;
       if (typeof m?.court === "string") this.court = m.court.slice(0, 20);

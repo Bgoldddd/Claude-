@@ -1,6 +1,6 @@
 // COURTSIDE gameplay tests. Run with: npm test
 import { newBall, solveLaunch, stepBall } from "../shared/ball";
-import { DT, HOOP, MATCH } from "../shared/constants";
+import { DT, HOOP, MATCH, shotValueAt } from "../shared/constants";
 import { Game, SHOT_DURATION, SHOT_TARGET, gradeTiming, contestLabel } from "../shared/game";
 import { defaultSettings, emptyInput, PlayerInput, PlayerSetup } from "../shared/types";
 
@@ -67,7 +67,7 @@ for (const mode of ["1v1", "2v2", "3v3"] as const) {
   const [a, b] = g.score;
   check("no NaN positions", ok);
   check("match finishes", g.phase === "gameover", `score ${a}-${b} in ${Math.round(g.matchTime)}s`);
-  check("winner reached 11 and won by 2 (or hit 15)", (Math.max(a, b) >= 11 && Math.abs(a - b) >= 2) || Math.max(a, b) >= 15);
+  check(`winner reached the target (${s.target})`, Math.max(a, b) >= s.target && a !== b);
   const r = g.result();
   const pts = r.players.reduce((acc, p) => acc + p.stats.pts, 0);
   check("player points add up to the score", pts === a + b, `(${pts} vs ${a + b})`);
@@ -168,6 +168,42 @@ function freeShot(release: number, x = 8, z = 0) {
   let ev: any = null;
   for (let i = 0; i < 90; i++) { g.setInput("me", { ...emptyInput(), shoot: i < 40 }); g.setInput("d", { ...emptyInput(), stance: true }); g.step(); for (const e of g.events) if (e.t === "shot") ev = e; }
   check("shot event carries the contest level", ev && ev.contest > 0.35 && ev.contestBy === "d", `(${ev?.contest} → ${contestLabel(ev?.contest ?? 0)})`);
+}
+
+{
+  // ISO moves
+  check("3 points beyond the arc, 2 inside", shotValueAt(HOOP.x - 7.5, 0) === 3 && shotValueAt(HOOP.x - 4, 0) === 2 && shotValueAt(13, 7) === 3);
+  const mk = () => {
+    const g = new Game({ ...defaultSettings("free") }, [{ id: "o", name: "o", team: 0, bot: false, archetype: "slasher" }, { id: "d", name: "d", team: 1, bot: false, archetype: "lockdown" }], 6);
+    const o = g.player("o")!, d = g.player("d")!;
+    o.x = 5; o.z = 0; o.facing = 0; d.x = 7.2; d.z = 0; d.facing = Math.PI;
+    g.ball.state = "held"; g.ball.holder = "o";
+    return { g, o, d };
+  };
+  // pump fake: tap Space keeps the ball
+  {
+    const { g, o } = mk();
+    for (let i = 0; i < 40; i++) { g.setInput("o", { ...emptyInput(), shoot: i < 5, hold: i < 5 ? 0 : 0.08 }); g.step(); if (o.action === "pumpfake") break; }
+    check("tapping shoot is a pump fake (keeps the ball, no shot)", o.action === "pumpfake" && g.ball.holder === "o");
+  }
+  // drive with nobody set: blows by
+  {
+    const { g, o, d } = mk();
+    d.z = 1.2;
+    g.setInput("o", { ...emptyInput(), l: 1 }); g.step();
+    for (let i = 0; i < 30; i++) { g.setInput("o", { ...emptyInput(), l: 1, mx: 1 }); g.step(); }
+    check("drive bursts toward the rim", o.x > 7.0, `(x ${o.x.toFixed(1)})`);
+    void d;
+  }
+  // drive into a defender who slides into the lane: cut off
+  {
+    const { g, o, d } = mk();
+    d.z = 0.9;
+    let cut = false;
+    g.setInput("o", { ...emptyInput(), l: 1 }); g.setInput("d", { ...emptyInput(), k: 1, mz: -1 }); g.step();
+    for (let i = 0; i < 40; i++) { g.setInput("o", { ...emptyInput(), l: 1, mx: 1 }); g.setInput("d", { ...emptyInput(), k: 1 }); g.step(); for (const e of g.events) if (e.t === "msg" && e.text === "CUT OFF") cut = true; }
+    check("sliding into the lane cuts off the drive", cut, `(driver x ${o.x.toFixed(1)})`);
+  }
 }
 
 // --------------------------------------------------------------- must clear + out of bounds

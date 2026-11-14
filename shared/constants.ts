@@ -70,7 +70,7 @@ export const SPOTS = {
 
 export const MATCH = {
   target: 11,
-  winBy: 2,
+  winBy: 1, // first to the target wins
   cap: 15,
   shotClock: 12,
   shotClockTeam: 14,
@@ -85,20 +85,21 @@ export const DUNK_CONTEST = { attempts: 5, duration: 120 };
 export type Mode = "1v1" | "2v2" | "3v3" | "shootout" | "dunk" | "free";
 export const TEAM_MODES: Mode[] = ["1v1", "2v2", "3v3"];
 export const MODE_INFO: Record<Mode, { label: string; size: number; desc: string }> = {
-  "1v1": { label: "1V1 SHOWDOWN", size: 1, desc: "First to 11, win by 2. Ones and twos." },
-  "2v2": { label: "2V2 DUOS", size: 2, desc: "Two-man game. Pass, screen, score." },
-  "3v3": { label: "3V3 PARK", size: 3, desc: "The main event. Run it with your squad." },
+  "1v1": { label: "1V1 SHOWDOWN", size: 1, desc: "First to 11. Make it, take it. 2s and 3s." },
+  "2v2": { label: "2V2 DUOS", size: 2, desc: "First to 16. Two-man game." },
+  "3v3": { label: "3V3 PARK", size: 3, desc: "First to 16. Run it with your squad." },
   shootout: { label: "SHOOTOUT", size: 1, desc: "60 seconds. 5 racks. Money ball is worth 2." },
   dunk: { label: "DUNK CONTEST", size: 1, desc: "5 attempts. Style, timing and speed score points." },
   free: { label: "SHOOTAROUND", size: 6, desc: "Warm up. No score, no pressure." },
 };
 
 /** Point value of a shot taken from (x, z): 2 beyond the arc, 1 inside (street scoring). */
-export function shotValueAt(x: number, z: number): 1 | 2 {
+/** Point value of a shot taken from (x, z): 3 beyond the arc, 2 inside. */
+export function shotValueAt(x: number, z: number): 2 | 3 {
   const dx = x - HOOP.x;
   const d = Math.hypot(dx, z - HOOP.z);
-  if (Math.abs(z) >= COURT.threeCornerZ && x > HOOP.x - 1.6) return 2;
-  return d > COURT.threeRadius ? 2 : 1;
+  if (Math.abs(z) >= COURT.threeCornerZ && x > HOOP.x - 1.6) return 3;
+  return d > COURT.threeRadius ? 3 : 2;
 }
 
 export function isBeyondArc(x: number, z: number, margin = 0.15): boolean {

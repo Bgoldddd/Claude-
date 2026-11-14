@@ -15,7 +15,7 @@ export interface Settings extends EngineSettings {
   court: string;
 }
 export const defaultSettings = (): Settings => ({
-  quality: "medium", sensitivity: 1, invertY: false, camDist: 5.2, showFps: false, hoopCam: false, showMeter: true,
+  scheme: "iso", quality: "medium", sensitivity: 1, invertY: false, camDist: 5.2, showFps: false, hoopCam: false, showMeter: true,
   master: 0.8, sfx: 0.9, crowd: 0.5, ui: 0.7, binds: { ...DEFAULT_BINDS }, court: "the_block",
 });
 
@@ -73,7 +73,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // push settings into the engine and audio
   useEffect(() => {
-    engine.applySettings({ quality: settings.quality, sensitivity: settings.sensitivity, invertY: settings.invertY, camDist: settings.camDist, showFps: settings.showFps, hoopCam: settings.hoopCam, showMeter: settings.showMeter });
+    engine.applySettings({ scheme: settings.scheme, quality: settings.quality, sensitivity: settings.sensitivity, invertY: settings.invertY, camDist: settings.camDist, showFps: settings.showFps, hoopCam: settings.hoopCam, showMeter: settings.showMeter });
     engine.input.binds = { ...settings.binds };
     audio.setVolumes({ master: settings.master, sfx: settings.sfx, crowd: settings.crowd, ui: settings.ui });
   }, [settings]);

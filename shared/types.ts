@@ -19,17 +19,18 @@ export interface PlayerInput {
   emote: number; // quick message id press counter
   emoteId: number;
   hold: number; // client-measured seconds the shoot button has been held (checked by the server)
+  j: number; k: number; l: number; // ISO keys: J cross/steal, K stepback/slide, L drive/jump
 }
 
 export const emptyInput = (): PlayerInput => ({
   seq: 0, mx: 0, mz: 0, yaw: 0, sprint: false, shoot: false, stance: false,
-  jump: 0, pass: 0, move: 0, action: 0, interact: 0, emote: 0, emoteId: 0, hold: 0,
+  jump: 0, pass: 0, move: 0, action: 0, interact: 0, emote: 0, emoteId: 0, hold: 0, j: 0, k: 0, l: 0,
 });
 
 export type Action =
   | "none" | "jumpshot" | "layup" | "dunk" | "pass" | "steal" | "jump"
   | "cross" | "btl" | "btb" | "hesi" | "stepback" | "spin"
-  | "celebrate" | "stumble" | "check";
+  | "celebrate" | "stumble" | "check" | "pumpfake" | "drive" | "slide" | "jab";
 
 export type ShotTiming = "perfect" | "excellent" | "good" | "early" | "late";
 
@@ -114,7 +115,7 @@ export interface MatchSettings {
   difficulty: "rookie" | "pro" | "legend";
 }
 
-export const defaultSettings = (mode: Mode = "1v1"): MatchSettings => ({ mode, rule: "losers", target: 11, timeLimit: 600, difficulty: "pro" });
+export const defaultSettings = (mode: Mode = "1v1"): MatchSettings => ({ mode, rule: "winners", target: mode === "2v2" || mode === "3v3" ? 16 : 11, timeLimit: 600, difficulty: "pro" });
 
 export interface PlayerSetup {
   id: string;

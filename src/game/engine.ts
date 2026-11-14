@@ -19,7 +19,7 @@ import { Loadout, defaultLoadout, itemById, QUICK_MESSAGES } from "../../shared/
 
 export type EngineMode = "menu" | "locker" | "play";
 export interface UiEvent { kind: "feed" | "center" | "timing" | "hint" | "dunk" | "contest"; text: string; sub?: string; color?: string; big?: boolean; tag?: string; tagColor?: string }
-export interface EngineSettings { quality: Quality; sensitivity: number; invertY: boolean; camDist: number; showFps: boolean; hoopCam: boolean; showMeter: boolean }
+export interface EngineSettings { scheme: "iso" | "classic"; quality: Quality; sensitivity: number; invertY: boolean; camDist: number; showFps: boolean; hoopCam: boolean; showMeter: boolean }
 
 const TEAM_RING = ["#ff7a2f", "#00d0f0"];
 const TEAM_JERSEY = [{ color: "#c2541c", trim: "#ecebe6" }, { color: "#1e1f22", trim: "#00c2dc" }];
@@ -44,7 +44,7 @@ export class Engine {
   input = new Input();
   session: Session | null = null;
   mode: EngineMode = "menu";
-  settings: EngineSettings = { quality: "medium", sensitivity: 1, invertY: false, camDist: 5.2, showFps: false, hoopCam: false, showMeter: true };
+  settings: EngineSettings = { scheme: "iso", quality: "medium", sensitivity: 1, invertY: false, camDist: 5.2, showFps: false, hoopCam: false, showMeter: true };
   container!: HTMLElement;
   ready = false;
   paused = false;
@@ -98,9 +98,9 @@ export class Engine {
     this.input.onToggleScoreboard = (d) => this.onScoreboard(d);
     this.input.onCamera = () => { this.settings.hoopCam = !this.settings.hoopCam; this.onUi({ kind: "hint", text: this.settings.hoopCam ? "Camera: follow hoop" : "Camera: free mouse" }); };
     this.input.onEscape = () => { if (this.mode === "play") this.onPauseRequest(); };
-    r.domElement.addEventListener("click", () => { if (this.mode === "play" && !this.paused) this.lockPointer(); audio.unlock(); });
+    r.domElement.addEventListener("click", () => { if (this.mode === "play" && !this.paused && this.settings.scheme === "classic") this.lockPointer(); audio.unlock(); });
     document.addEventListener("pointerlockchange", () => {
-      if (document.pointerLockElement !== r.domElement && this.mode === "play" && !this.paused && this.session && !this.session.results) this.onPauseRequest();
+      if (this.settings.scheme === "classic" && document.pointerLockElement !== r.domElement && this.mode === "play" && !this.paused && this.session && !this.session.results) this.onPauseRequest();
     });
     this.resizeObs = new ResizeObserver(() => this.resize());
     this.resizeObs.observe(container);
@@ -165,6 +165,8 @@ export class Engine {
   applySettings(s: Partial<EngineSettings>) {
     const qChanged = s.quality && s.quality !== this.settings.quality;
     this.settings = { ...this.settings, ...s };
+    this.input.scheme = this.settings.scheme;
+    if (this.settings.scheme === "iso") this.unlockPointer();
     if (qChanged && this.ready) {
       this.setupComposer();
       const id = this.court; this.court = ""; this.loadCourt(id);
@@ -300,7 +302,7 @@ export class Engine {
             const col = e.timing === "perfect" ? "#3dff8a" : e.timing === "excellent" ? "#9be15d" : e.timing === "good" ? "#ffd166" : "#ff6b3d";
             const c = e.contest ?? 0;
             if (e.kind !== "dunk") this.onUi({ kind: "timing", text: e.timing.toUpperCase(), color: col, tag: contestLabel(c), tagColor: contestColor(c),
-              sub: e.timing === "perfect" ? "GREEN — automatic bucket" : `${e.value === 2 ? "2PT" : "1PT"} · ${Math.round(e.quality * 100)}% shot` });
+              sub: e.timing === "perfect" ? "GREEN — automatic bucket" : `${e.value === 3 ? "3PT" : "2PT"} · ${Math.round(e.quality * 100)}% shot` });
             if (e.timing === "perfect") audio.perfect();
           }
           // defender feedback: how well did I contest this shot?
@@ -393,7 +395,10 @@ export class Engine {
     if (this.fpsT > 0.5) { this.fps = Math.round(this.frameCount / this.fpsT); this.frameCount = 0; this.fpsT = 0; }
 
     if (this.mode === "play" && this.session) {
-      const inp = this.input.build(this.yaw);
+      const ls = this.lastSnap, meId = this.session.me;
+      const mine = ls?.p.find((p) => p.id === meId), h = ls?.b.h ? ls.p.find((p) => p.id === ls.b.h) : undefined;
+      this.input.autoStance = !!(mine && h && h.tm !== mine.tm && Math.hypot(h.x - mine.x, h.z - mine.z) < 3.2);
+      const inp = this.input.build(this.settings.scheme === "iso" ? 0 : this.yaw);
       this.session.sendInput(inp);
       this.session.update(dt);
       const snap = this.interpolated();
@@ -453,7 +458,7 @@ export class Engine {
     const c = v.char;
     const side = p.h > 0 ? "R" : "L", other = p.h > 0 ? "L" : "R";
     const fx = Math.cos(v.facing), fz = Math.sin(v.facing);
-    if (p.a === "jumpshot" || p.a === "layup") {
+    if (p.a === "jumpshot" || p.a === "layup" || p.a === "pumpfake") {
       c.handWorld("R", out); out.y += 0.1; out.x += fx * 0.05; out.z += fz * 0.05; return;
     }
     if (p.a === "dunk" || s.phase === "check" || s.phase === "pregame" || p.a === "pass" || p.a === "celebrate") {
@@ -531,6 +536,17 @@ export class Engine {
       this.pitch = Math.max(-0.05, Math.min(1.1, this.pitch));
     }
     const focus = v ? tmp.copy(v.disp) : tmp.set(6, 0, 0);
+    if (this.settings.scheme === "iso") {
+      // ISO broadcast camera: always behind the play, looking at the hoop. W = toward the hoop.
+      this.yaw = lerpAng(this.yaw, 0, 1 - Math.exp(-dt * 6));
+      const fx = Math.min(focus.x, 11.2);
+      this.camTarget.lerp(tmp2.set(fx * 0.85 + 1.2, 1.2, focus.z * 0.7), 1 - Math.exp(-dt * 5));
+      const pos = this.camera.position;
+      const want = tmp3.set(this.camTarget.x - 7.4 * (this.settings.camDist / 5.2), 5.0, this.camTarget.z * 0.85);
+      pos.lerp(want, 1 - Math.exp(-dt * 6));
+      this.camera.lookAt(this.camTarget.x + 2.4, 1.0, this.camTarget.z * 0.9);
+      return;
+    }
     // ON DEFENSE: swing the camera behind you so you face the ball handler (or the loose ball)
     const meSnap = s?.p.find((p) => p.id === me);
     const holder = s?.b.h ? s.p.find((p) => p.id === s.b.h) : undefined;
@@ -621,7 +637,7 @@ export class Engine {
     const s = this.renderSnap; const me = this.session?.me;
     const p = s?.p.find((x) => x.id === me);
     const v = me ? this.views.get(me) : undefined;
-    const holding = this.input.mouseL && this.input.enabled;
+    const holding = this.input.shootHeld;
     const shooting = p && (p.a === "jumpshot" || p.a === "layup" || (p.a === "dunk" && s?.mode === "dunk"));
     const hasBall = !!p && s?.b.h === me;
     let show = false, value = 0, kind = this.lastMeterKind;

@@ -138,7 +138,7 @@ export function GameScreen() {
       {hint && <div className="hint">{hint}</div>}
       {settings.showFps && <div className="fps">{hud?.fps ?? engine.fps} FPS</div>}
 
-      {!locked && !paused && !results && (
+      {settings.scheme === "classic" && !locked && !paused && !results && (
         <div className="click-to-play" onClick={() => { audio.unlock(); engine.lockPointer(); }}>
           <b>CLICK TO PLAY</b><small>Mouse looks around · Esc to pause</small>
         </div>
@@ -202,8 +202,8 @@ function LobbyPanel({ roster, open, setOpen, onLeave, social }: { roster: Roster
       {host && roster.visibility === "private" && (
         <Panel title="MATCH SETTINGS">
           <div className="row"><span>Mode</span><Tabs value={roster.settings.mode as string} onChange={(m) => set({ mode: m })} options={[{ id: "1v1", label: "1V1" }, { id: "2v2", label: "2V2" }, { id: "3v3", label: "3V3" }]} /></div>
-          <div className="row"><span>Play to</span><Tabs value={String(roster.settings.target)} onChange={(v) => set({ target: Number(v) })} options={["7", "11", "15", "21"].map((x) => ({ id: x, label: x }))} /></div>
-          <div className="row"><span>After a score</span><Tabs value={roster.settings.rule} onChange={(v) => set({ rule: v })} options={[{ id: "losers", label: "LOSERS' BALL" }, { id: "winners", label: "MAKE IT, TAKE IT" }]} /></div>
+          <div className="row"><span>Play to</span><Tabs value={String(roster.settings.target)} onChange={(v) => set({ target: Number(v) })} options={["11", "16", "21"].map((x) => ({ id: x, label: x }))} /></div>
+          <div className="row"><span>After a score</span><Tabs value={roster.settings.rule} onChange={(v) => set({ rule: v })} options={[{ id: "winners", label: "MAKE IT, TAKE IT" }, { id: "losers", label: "LOSERS' BALL" }]} /></div>
           <div className="row"><span>Time limit</span><Tabs value={String(roster.settings.timeLimit)} onChange={(v) => set({ timeLimit: Number(v) })} options={[{ id: "0", label: "NONE" }, { id: "300", label: "5 MIN" }, { id: "600", label: "10 MIN" }, { id: "900", label: "15 MIN" }]} /></div>
           <Toggle label="Fill empty spots with CPU" value={roster.fillBots} onChange={(v) => set({ fillBots: v })} />
           {roster.fillBots && <div className="row"><span>CPU level</span><Tabs value={roster.settings.difficulty} onChange={(v) => set({ difficulty: v })} options={[{ id: "rookie", label: "ROOKIE" }, { id: "pro", label: "PRO" }, { id: "legend", label: "LEGEND" }]} /></div>}
@@ -235,7 +235,7 @@ function BoxScore({ players, mode }: { players: any[]; mode: Mode }) {
     <div className="boxscore">
       {teams.map((t) => (
         <table key={t} className="table">
-          <thead><tr><th style={{ color: TEAM_COLORS[t] }}>{t === 0 ? "HOME" : "AWAY"}</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>FG</th><th>2PT</th><th>PERF</th></tr></thead>
+          <thead><tr><th style={{ color: TEAM_COLORS[t] }}>{t === 0 ? "HOME" : "AWAY"}</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>FG</th><th>3PT</th><th>PERF</th></tr></thead>
           <tbody>{players.filter((p) => p.team === t).map((p) => (
             <tr key={p.id} className={p.me ? "me" : ""}><td>{p.name}{p.bot && <span className="tag">CPU</span>}</td><td><b>{p.ss[0]}</b></td><td>{p.ss[1]}</td><td>{p.ss[2]}</td><td>{p.ss[3]}</td><td>{p.ss[4]}</td><td>{p.ss[5]}/{p.ss[6]}</td><td>{p.ss[7]}/{p.ss[8]}</td><td>{p.ss[9]}</td></tr>
           ))}</tbody>
@@ -309,7 +309,7 @@ function Results({ data, meId, onLeave, rematch, roster }: { data: any; meId: st
         )}
         {team && (
           <table className="table">
-            <thead><tr><th>PLAYER</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>FG%</th><th>2PT</th></tr></thead>
+            <thead><tr><th>PLAYER</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>FG%</th><th>3PT</th></tr></thead>
             <tbody>{r.players.map((p: any) => (
               <tr key={p.id} className={p.id === meId ? "me" : ""}><td><i className="tdot" style={{ background: TEAM_COLORS[p.team] }} />{p.name}{p.bot && <span className="tag">CPU</span>}</td><td><b>{p.stats.pts}</b></td><td>{p.stats.reb}</td><td>{p.stats.ast}</td><td>{p.stats.stl}</td><td>{p.stats.blk}</td><td>{pct(p.stats.fgm, p.stats.fga)}</td><td>{p.stats.tpm}/{p.stats.tpa}</td></tr>
             ))}</tbody>

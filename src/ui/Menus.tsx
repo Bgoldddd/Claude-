@@ -6,7 +6,7 @@ import { OnlineSession, LocalSession } from "../net/session";
 import { engine } from "../game/engine";
 import { audio } from "../game/audio";
 import { availableCourts, CourtDef, COURTS } from "../game/assets";
-import { BIND_LABELS, Bind, DEFAULT_BINDS, keyName } from "../game/input";
+import { BIND_LABELS, Bind, DEFAULT_BINDS, keyName, ISO_KEYS } from "../game/input";
 import { MODE_INFO, Mode } from "../../shared/constants";
 import { ARCHETYPES } from "../../shared/progression";
 import { QUICK_MESSAGES } from "../../shared/cosmetics";
@@ -248,6 +248,10 @@ export function SettingsScreen() {
         )}
         {tab === "controls" && (
           <div className="two-col">
+            <Panel title="CONTROL STYLE">
+              <Tabs value={settings.scheme} onChange={(v) => updateSettings({ scheme: v })} options={[{ id: "iso", label: "ISO KEYS (KEYBOARD)" }, { id: "classic", label: "CLASSIC (MOUSE)" }]} />
+              <p className="muted tiny">ISO: keyboard only, fixed camera behind the play, W is always toward the hoop. Classic: mouse aims the camera, left click shoots.</p>
+            </Panel>
             <Panel title="CAMERA">
               <Slider label="Mouse sensitivity" value={settings.sensitivity} min={0.2} max={3} step={0.05} onChange={(v) => updateSettings({ sensitivity: v })} fmt={(v) => v.toFixed(2)} />
               <Slider label="Camera distance" value={settings.camDist} min={3.5} max={8} step={0.1} onChange={(v) => updateSettings({ camDist: v })} fmt={(v) => `${v.toFixed(1)} m`} />
@@ -284,6 +288,13 @@ export function SettingsScreen() {
 
 export function ControlsGuide({ inline, onClose }: { inline?: boolean; onClose?: () => void }) {
   const { settings } = useStore();
+  if (settings.scheme === "iso") return (
+    <Panel title="CONTROLS — ISO KEYS" className={inline ? "guide inline" : "guide"} right={onClose && <Btn small variant="ghost" onClick={onClose}>CLOSE</Btn>}>
+      <table className="table"><thead><tr><th>KEY</th><th>OFFENSE</th><th>DEFENSE</th></tr></thead>
+        <tbody>{ISO_KEYS.map(([k, o, d]) => <tr key={k}><td><span className="key fixed">{k}</span></td><td>{o}</td><td>{d}</td></tr>)}</tbody></table>
+      <p className="muted tiny">Tips: tap Space to pump fake — if they jump, drive past. Cross (J) right when they reach. On defense, watch the jab, then hold A or D that way and press K to slide and cut off the drive. Inside the arc is 2, outside is 3. First to 11, make it take it. After a steal, block or rebound, clear it past the arc. Tab = box score, 1–8 = quick messages, Esc = pause.</p>
+    </Panel>
+  );
   const b = settings.binds;
   const rows: [string, string][] = [
     [`${keyName(b.forward)} ${keyName(b.left)} ${keyName(b.back)} ${keyName(b.right)}`, "Move (relative to camera)"],
@@ -306,7 +317,7 @@ export function ControlsGuide({ inline, onClose }: { inline?: boolean; onClose?:
       <div className="guide-grid">
         {rows.map(([k, d]) => <React.Fragment key={k + d}><span className="key fixed">{k}</span><span>{d}</span></React.Fragment>)}
       </div>
-      <p className="muted tiny">Tips: dunks need speed (sprint toward the rim). Inside the arc after a steal or defensive rebound you must clear it — take it behind the arc first. Shots are 1 point inside the arc, 2 beyond it. First to 11, win by 2.</p>
+      <p className="muted tiny">Tips: dunks need speed (sprint toward the rim). After a steal or defensive rebound you must clear it — take it behind the arc first. Shots are 2 inside the arc, 3 beyond it. First to 11, make it take it.</p>
     </Panel>
   );
 }

@@ -53,8 +53,9 @@ All keys can be changed in **SETTINGS → CONTROLS**.
 
 ## Rules (street rules)
 
-- 1 point inside the arc, 2 points beyond it.
-- First to 11, win by 2, game ends at 15. (Host can change to 7, 15 or 21.)
+- 2 points inside the arc, 3 points beyond it.
+- 1v1: first to 11. 2v2 and 3v3: first to 16. Make it, take it.
+- ISO keys (default): WASD move, Space hold to shoot / tap to pump fake, J crossover / steal, K stepback / slide, L drive (double tap = blow-by) / block jump, I pass. Classic mouse controls are in Settings.
 - After a steal or defensive rebound you must **clear it** (take it behind the arc) before you shoot.
 - 12 second shot clock in 1v1, 14 in team games.
 - Losers' ball after a score (host can switch to "make it, take it").

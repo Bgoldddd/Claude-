@@ -332,6 +332,30 @@ export class Character {
         p.hipPitchL = 0.6; p.kneeL = 0.9; p.hipPitchR = -0.15; p.kneeR = 0.3; p.headPitch = 0.25;
         break;
       }
+      case "pumpfake": {
+        const up = sm(0, 0.12, at) * (1 - sm(0.22, 0.38, at));
+        p.hipY = -0.08 * up; p.kneeL = p.kneeR = 0.35 + 0.15 * up; p.hipPitchL = p.hipPitchR = 0.25;
+        p.shPitchR = 1.1 + 1.5 * up; p.elbowR = 1.6 - 0.1 * up; p.shPitchL = 1.0 + 1.3 * up; p.elbowL = 1.5; p.shAbdL = 0.2;
+        p.headPitch = -0.25 * up; p.lean = 0.1;
+        break;
+      }
+      case "drive": {
+        const k = sm(0, 0.08, at) * (1 - sm(0.45, 0.55, at));
+        p.lean += 0.35 * k; p.hipY -= 0.1 * k; p.kneeL += 0.2 * k; p.kneeR += 0.2 * k;
+        const o = a.hand > 0 ? "L" : "R"; (p as any)["shPitch" + o] = 0.7; (p as any)["shAbd" + o] = 0.35; (p as any)["elbow" + o] = 1.2;
+        break;
+      }
+      case "slide": {
+        const k = sm(0, 0.06, at) * (1 - sm(0.25, 0.32, at));
+        p.hipY = -0.24; p.lean = 0.4; p.kneeL = p.kneeR = 1.05; p.hipPitchL = p.hipPitchR = 0.8;
+        p.hipAbdL = p.hipAbdR = 0.3 + 0.25 * k; p.shPitchL = p.shPitchR = 0.5; p.shAbdL = p.shAbdR = 1.2; p.elbowL = p.elbowR = 0.35;
+        break;
+      }
+      case "jab": {
+        const k = sm(0, 0.08, at) * (1 - sm(0.2, 0.3, at));
+        p.roll = 0.18 * k * (a.hand > 0 ? 1 : -1); p.hipPitchR = 0.6 * k; p.kneeR = 0.6 * k; p.lean += 0.15 * k;
+        break;
+      }
       case "celebrate": this.celebrate(p, a.celebration, at, t); break;
     }
 

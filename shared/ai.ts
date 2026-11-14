@@ -5,9 +5,9 @@ import { SHOT_DURATION, SHOT_TARGET } from "./game";
 import { PlayerInput } from "./types";
 
 const DIFF = {
-  rookie: { sigma: 0.11, react: 0.4, steal: 0.12, contest: 0.55, iq: 0.45 },
-  pro: { sigma: 0.065, react: 0.2, steal: 0.25, contest: 0.8, iq: 0.7 },
-  legend: { sigma: 0.04, react: 0.12, steal: 0.35, contest: 0.95, iq: 0.9 },
+  rookie: { sigma: 0.11, react: 0.4, steal: 0.12, contest: 0.55, iq: 0.45, bite: 0.6, slide: 0.3 },
+  pro: { sigma: 0.065, react: 0.2, steal: 0.25, contest: 0.8, iq: 0.7, bite: 0.32, slide: 0.55 },
+  legend: { sigma: 0.04, react: 0.12, steal: 0.35, contest: 0.95, iq: 0.9, bite: 0.12, slide: 0.8 },
 };
 
 function gauss(r: () => number) { return Math.sqrt(-2 * Math.log(Math.max(1e-9, r()))) * Math.cos(2 * Math.PI * r()); }
@@ -16,7 +16,7 @@ export function botThink(g: Game, p: SimPlayer): PlayerInput {
   const d = DIFF[g.settings.difficulty] ?? DIFF.pro;
   const m = p.botMemory;
   const inp: PlayerInput = { ...p.prev, mx: 0, mz: 0, sprint: false, shoot: false, stance: false };
-  const press = (k: "jump" | "pass" | "move" | "action" | "interact") => { inp[k] = p.prev[k] + 1; };
+  const press = (k: "jump" | "pass" | "move" | "action" | "interact" | "j" | "k" | "l") => { inp[k] = p.prev[k] + 1; };
   const goTo = (x: number, z: number, sprint = false, slowR = 0.6) => {
     const dx = x - p.x, dz = z - p.z; const l = Math.hypot(dx, dz);
     if (l < 0.15) return true;
@@ -30,6 +30,7 @@ export function botThink(g: Game, p: SimPlayer): PlayerInput {
 
   // ongoing shot: release at the planned time
   if (p.action === "jumpshot" || p.action === "layup") {
+    if (m.faking && p.action === "jumpshot") { m.faking = false; inp.shoot = false; return inp; } // tap = pump fake
     if (m.releaseAt === undefined) {
       const kind = p.action;
       m.releaseAt = SHOT_TARGET[kind] * SHOT_DURATION[kind] + gauss(g.rand) * d.sigma * SHOT_DURATION[kind];
@@ -95,7 +96,11 @@ export function botThink(g: Game, p: SimPlayer): PlayerInput {
       m.plan = "drive";
       if (dRim < 2.8 && (open || g.rand() < 0.5)) m.plan = "attack";
       else if ((open && dRim < range && g.rand() < 0.55 + d.iq * 0.3) || late) m.plan = "shoot";
-      else if (def && od < 1.6 && defInFront && p.moveCd <= 0 && p.stamina > 0.3 && g.rand() < 0.35 + d.iq * 0.2) m.plan = shooter && dRim < 8 && g.rand() < 0.5 ? "stepback" : "move";
+      else if (def && od < 1.6 && defInFront && p.moveCd <= 0 && p.stamina > 0.3 && g.rand() < 0.35 + d.iq * 0.2) {
+        const r = g.rand();
+        m.plan = shooter && dRim < 8.5 && r < 0.3 ? "stepback" : r < 0.55 ? "jabdrive" : r < 0.75 && dRim < 8 ? "pumpfake" : "move";
+      }
+      else if (def && od < 2.4 && defInFront && dRim < 7.5 && p.moveCd <= 0 && g.rand() < 0.25) m.plan = "jabdrive";
       else if (mates.length && g.rand() < 0.22) {
         const openMate = mates.find((q) => opp.every((o) => Math.hypot(o.x - q.x, o.z - q.z) > 2.2));
         if (openMate) { m.plan = "pass"; m.passTo = openMate.id; }
@@ -116,6 +121,22 @@ export function botThink(g: Game, p: SimPlayer): PlayerInput {
         press("move"); m.plan = "drive"; m.decideT = 0.15; return inp;
       }
       case "stepback": press("action"); m.plan = "shoot"; m.decideT = 0.35; return inp;
+      case "jabdrive": {
+        // jab one way, then drive (same way or the other way)
+        m.jab = m.jab ?? { side: g.rand() < 0.5 ? 1 : -1, t: 0, go: g.rand() < 0.5 ? 1 : -1 };
+        m.jab.t += 1 / 60;
+        const sx = -toRimZ, sz = toRimX;
+        if (m.jab.t < 0.22) { inp.mx = sx * m.jab.side * 0.6; inp.mz = sz * m.jab.side * 0.6; return inp; }
+        inp.mx = toRimX * 0.75 + sx * m.jab.side * m.jab.go * 0.65; inp.mz = toRimZ * 0.75 + sz * m.jab.side * m.jab.go * 0.65;
+        press("l"); m.jab = undefined; m.plan = "attack"; m.decideT = 0.6; return inp;
+      }
+      case "pumpfake": {
+        // tap shoot to fake, then attack if they bite
+        m.pf = (m.pf ?? 0) + 1;
+        if (m.pf === 1) { inp.shoot = true; m.faking = true; }
+        if (m.pf > 12) { m.pf = 0; m.plan = def && def.airborne ? "jabdrive" : g.rand() < 0.5 ? "shoot" : "jabdrive"; }
+        return inp;
+      }
       case "pass": {
         const t = g.player(m.passTo);
         if (t) { inp.yaw = Math.atan2(t.z - p.z, t.x - p.x); inp.mx = 0; inp.mz = 0; press("pass"); }
@@ -170,6 +191,21 @@ export function botThink(g: Game, p: SimPlayer): PlayerInput {
     m.contestT -= 1 / 60;
     if (m.contestT <= 0 && !p.airborne && g.rand() < d.contest) { press("jump"); m.contestT = 99; }
   } else m.contestT = undefined;
+  // read the drive: slide to beat them to the spot
+  if (onBall && man.action === "drive" && man.actionT < 0.45 && dist < 3.5) {
+    m.slideT = m.slideT ?? d.react * (0.6 + g.rand() * 0.6);
+    m.slideT -= 1 / 60;
+    if (m.slideT <= 0) {
+      if (g.rand() < d.slide) { const tx = man.x + man.vx * 0.3 - p.x, tz = man.z + man.vz * 0.3 - p.z; inp.mx = tx; inp.mz = tz; press("k"); } // beat him to the spot
+      m.slideT = 99;
+    }
+  } else m.slideT = undefined;
+  // bite on pump fakes (better defenders bite less)
+  if (onBall && man.action === "pumpfake" && man.actionT < 0.12 && dist < 2.4 && !p.airborne && !m.bitTried) {
+    m.bitTried = true;
+    if (g.rand() < d.bite) press("jump");
+  }
+  if (man.action !== "pumpfake") m.bitTried = false;
   // steals
   if (onBall && dist < 1.25 && p.stealCd <= 0 && man.action !== "jumpshot" && g.rand() < d.steal / 60 * 2.2) press("action");
   return inp;

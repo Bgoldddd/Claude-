@@ -175,12 +175,12 @@ export function Profile() {
               <div className="stat-grid">
                 {[
                   ["RECORD", `${s.wins}-${s.losses}`], ["WIN %", pct(s.wins, g)], ["PPG", g ? (s.pts / g).toFixed(1) : "—"], ["FG%", pct(s.fgm, s.fga)],
-                  ["2PT%", pct(s.tpm, s.tpa)], ["APG", g ? (s.ast / g).toFixed(1) : "—"], ["RPG", g ? (s.reb / g).toFixed(1) : "—"], ["SPG", g ? (s.stl / g).toFixed(1) : "—"],
+                  ["3PT%", pct(s.tpm, s.tpa)], ["APG", g ? (s.ast / g).toFixed(1) : "—"], ["RPG", g ? (s.reb / g).toFixed(1) : "—"], ["SPG", g ? (s.stl / g).toFixed(1) : "—"],
                   ["BPG", g ? (s.blk / g).toFixed(1) : "—"], ["STREAK", s.streak > 0 ? `W${s.streak}` : s.streak < 0 ? `L${-s.streak}` : "—"], ["BEST STREAK", `W${s.bestStreak}`], ["PERFECTS", s.perfect],
                   ["SHOOTOUT", s.shootoutBest], ["DUNK BEST", (s.dunkBest ?? 0).toFixed(1)], ["POINTS", s.pts], ["GAMES", g],
                 ].map(([l, v]) => <div key={l as string} className="stat"><small>{l}</small><b>{v}</b></div>)}
               </div>
-              <p className="muted tiny">"2PT%" = shots from beyond the arc (street scoring: 1s and 2s).</p>
+              <p className="muted tiny">Inside the arc is 2, outside is 3.</p>
             </Panel>
           </div>
           <Panel title="MATCH HISTORY">

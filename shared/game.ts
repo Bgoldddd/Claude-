@@ -15,7 +15,7 @@ import { botThink } from "./ai";
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const angDiff = (a: number, b: number) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
-const MOVE_ACTIONS: Action[] = ["cross", "btl", "btb", "hesi", "stepback", "spin"];
+const MOVE_ACTIONS: Action[] = ["cross", "btl", "btb", "hesi", "stepback", "spin", "drive", "jab"];
 
 export function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -184,7 +184,7 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ input presses
-  private pressed(p: SimPlayer, k: "jump" | "pass" | "move" | "action" | "interact" | "emote") {
+  private pressed(p: SimPlayer, k: "jump" | "pass" | "move" | "action" | "interact" | "emote" | "j" | "k" | "l") {
     return p.input[k] !== p.prev[k];
   }
 
@@ -193,7 +193,7 @@ export class Game {
   private handlePresses(p: SimPlayer) {
     const hasBall = this.ball.holder === p.id;
     const busy = p.action === "jumpshot" || p.action === "layup" || p.action === "dunk" || p.action === "stumble";
-    p.stance = p.input.stance && !hasBall && !busy;
+    p.stance = (p.input.stance || p.action === "slide") && !hasBall && !busy;
     p.stanceT = p.stance ? p.stanceT + DT : 0;
     p.sprint = p.input.sprint && p.stamina > 0.05 && !p.stance;
 
@@ -212,31 +212,13 @@ export class Game {
     if (busy) return;
 
     if (this.pressed(p, "jump") && !p.airborne && p.jumpCd <= 0) {
-      if (!hasBall) {
-        let vy = PLAYER.jumpVel * (0.95 + p.attrs.defense * 0.08);
-        // aim the jump at the nearest opponent with the ball (or shooting) — like a real contest
-        const t = this.blockTarget(p);
-        if (t) {
-          const dx = t.x - p.x, dz = t.z - p.z, dist = Math.hypot(dx, dz) || 1;
-          const ux = dx / dist, uz = dz / dist;
-          const away = -(p.vx * ux + p.vz * uz); // speed moving away from the target
-          p.facing = Math.atan2(dz, dx);
-          if (away > 1.0) {
-            // jumping while running the other way: weak, late jump and you lose your legs
-            vy *= 0.78;
-            p.vx *= 0.25; p.vz *= 0.25;
-            p.stumbleT = Math.max(p.stumbleT, 0.95); // lasts past the landing
-          } else {
-            const lunge = Math.min(2.4, Math.max(0, dist - 0.6) * 1.6);
-            p.vx = p.vx * 0.4 + ux * lunge; p.vz = p.vz * 0.4 + uz * lunge;
-          }
-        }
-        p.vy = vy;
-        p.action = "jump"; p.actionT = 0; p.jumpCd = 0.55;
-        p.stamina = Math.max(0, p.stamina - 0.04);
-      }
+      if (!hasBall) this.blockJump(p);
     }
     if (this.pressed(p, "pass") && hasBall && this.canPlay()) this.tryPass(p);
+    // ISO keys — what they do depends on whether you have the ball
+    if (this.pressed(p, "j")) { if (hasBall && this.canPlay()) this.dribbleMove(p, false, "cross"); else if (!hasBall && p.stealCd <= 0) this.startSteal(p); }
+    if (this.pressed(p, "k")) { if (hasBall && this.canPlay()) this.dribbleMove(p, true); else if (!hasBall) this.startSlide(p); }
+    if (this.pressed(p, "l")) { if (hasBall && this.canPlay()) this.drive(p); else if (!hasBall && !p.airborne && p.jumpCd <= 0) this.blockJump(p); }
     if (this.pressed(p, "move") && hasBall && this.canPlay()) this.dribbleMove(p, false);
     if (this.pressed(p, "action")) {
       if (hasBall && this.canPlay()) this.dribbleMove(p, true);
@@ -323,7 +305,7 @@ export class Game {
 
     if (!p.airborne && p.action !== "layup" && p.action !== "dunk") {
       // moves: burst velocity is applied in dribbleMove; here we steer toward desired velocity
-      const isMove = MOVE_ACTIONS.includes(p.action) && p.actionT < 0.28;
+      const isMove = (MOVE_ACTIONS.includes(p.action) && p.actionT < (p.action === "drive" ? 0.4 : 0.28)) || (p.action === "slide" && p.actionT < 0.22);
       if (!isMove) {
         const tvx = mx * maxSpeed, tvz = mz * maxSpeed;
         const dvx = tvx - p.vx, dvz = tvz - p.vz;
@@ -391,7 +373,7 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ dribble moves
-  private dribbleMove(p: SimPlayer, contextual: boolean) {
+  private dribbleMove(p: SimPlayer, contextual: boolean, force?: Action) {
     if (p.moveCd > 0 || p.airborne) return;
     const fx = Math.cos(p.facing), fz = Math.sin(p.facing);
     const rx = -fz, rz = fx; // right of facing
@@ -400,6 +382,7 @@ export class Game {
     let kind: Action;
     let bx = 0, bz = 0, burst = 0;
     if (contextual) { kind = "stepback"; bx = -fx; bz = -fz; burst = 4.6; }
+    else if (force === "cross") { kind = "cross"; const s = Math.abs(side) > 0.3 ? Math.sign(side) : -p.hand; bx = rx * s + fx * 0.45; bz = rz * s + fz * 0.45; burst = 5.8; p.hand = (s > 0 ? 1 : -1) as 1 | -1; }
     else if (Math.abs(side) > 0.45) { kind = "cross"; const s = Math.sign(side); bx = rx * s + fx * 0.45; bz = rz * s + fz * 0.45; burst = 5.6; p.hand = (s > 0 ? 1 : -1) as 1 | -1; }
     else if (fwd > 0.45) { kind = "hesi"; bx = fx; bz = fz; burst = 6.2; }
     else if (fwd < -0.45) { kind = "btl"; bx = -fx * 0.3; bz = -fz * 0.3; burst = 2.0; p.hand = (-p.hand) as 1 | -1; }
@@ -431,7 +414,8 @@ export class Game {
       const inFront = dirx * fx + dirz * fz > 0.2;
       if (dist < 1.7 && inFront) {
         let chance = 0.12 + (p.attrs.dribble - d.attrs.defense) * 0.45;
-        if (d.action === "steal" || d.airborne) chance += 0.45; // punish reaching and biting
+        if (d.action === "steal" && d.actionT < 0.3) chance += 0.65; // crossed right as they reached: ankles
+        else if (d.action === "steal" || d.airborne) chance += 0.45; // punish reaching and biting
         if (!d.stance) chance += 0.08; else chance -= 0.05;
         // defender drifting the wrong way relative to the move
         const dv = d.vx * (bx / bl) + d.vz * (bz / bl);
@@ -445,6 +429,94 @@ export class Game {
         }
       }
     }
+  }
+
+  // ------------------------------------------------------------------ ISO moves: drive, slide, block jump
+  /** L with the ball: burst toward the rim (or where you're pushing). Press again mid-drive to blow by. */
+  private drive(p: SimPlayer) {
+    if (p.airborne) return;
+    if (p.action === "drive" && p.actionT < 0.45 && !p.actionData?.second) {
+      const sp = Math.hypot(p.vx, p.vz) || 1;
+      p.vx = (p.vx / sp) * 7.6; p.vz = (p.vz / sp) * 7.6;
+      p.actionData.second = true; p.actionT = 0.05;
+      p.stamina = Math.max(0, p.stamina - 0.08);
+      this.emit({ t: "move", by: p.id, kind: "drive" });
+      return;
+    }
+    if (p.moveCd > 0) return;
+    let dx = p.input.mx, dz = p.input.mz;
+    if (Math.hypot(dx, dz) < 0.3) { dx = HOOP.x - p.x; dz = HOOP.z - p.z; }
+    const l = Math.hypot(dx, dz) || 1;
+    p.action = "drive"; p.actionT = 0; p.actionData = { second: false, beat: false };
+    p.vx = (dx / l) * 6.6; p.vz = (dz / l) * 6.6;
+    p.facing = Math.atan2(dz, dx);
+    p.moveCd = 0.4; p.stamina = Math.max(0, p.stamina - 0.07);
+    p.lastMoveT = this.time;
+    this.emit({ t: "move", by: p.id, kind: "drive" });
+  }
+
+  /** During a drive: a set defender in your path cuts you off; an unset one gets beat. */
+  private driveContact(p: SimPlayer) {
+    const sp = Math.hypot(p.vx, p.vz); if (sp < 0.5) return;
+    const ux = p.vx / sp, uz = p.vz / sp;
+    for (const d of this.players) {
+      if (d.team === p.team || d.airborne) continue;
+      const dx = d.x - p.x, dz = d.z - p.z, dist = Math.hypot(dx, dz);
+      if (dist > 1.0) continue;
+      const ahead = (dx * ux + dz * uz) / (dist || 1);
+      if (ahead >= 0.35) {
+        // defender in the lane: a slide (or a squared-up stance, sometimes) stops the drive
+        const slid = d.action === "slide";
+        const squared = d.stance && ahead > 0.8 && dist < 0.85;
+        if (squared && !slid && !p.actionData.rolled) { p.actionData.rolled = true; p.actionData.stanceStop = this.rand() < 0.3 + (d.attrs.defense - p.attrs.dribble) * 0.5; }
+        if ((slid || (squared && p.actionData.stanceStop)) && d.stumbleT <= 0) {
+          p.vx *= 0.15; p.vz *= 0.15; p.action = "none"; p.stumbleT = 0.3;
+          this.emit({ t: "msg", text: "CUT OFF", to: p.id });
+          this.emit({ t: "msg", text: "Cut him off!", to: d.id });
+          return;
+        }
+      } else if (ahead < -0.1 && ahead > -0.8 && dist < 0.9 && !p.actionData.beat && d.action !== "slide") {
+        // got alongside him: he's beat
+        p.actionData.beat = true;
+        d.stumbleT = Math.max(d.stumbleT, 0.3);
+      }
+    }
+  }
+
+  /** K on defense: a quick slide in the direction you hold (A/D). Beat them to the spot to cut off a drive. */
+  private startSlide(p: SimPlayer) {
+    if (p.airborne || p.stumbleT > 0 || (p.action === "slide" && p.actionT < 0.3)) return;
+    let dx = p.input.mx, dz = p.input.mz;
+    if (Math.hypot(dx, dz) < 0.3) {
+      const h = this.player(this.ball.holder);
+      if (h && h.team !== p.team) { dx = h.vx; dz = h.vz; }
+    }
+    const l = Math.hypot(dx, dz);
+    p.action = "slide"; p.actionT = 0;
+    if (l > 0.1) { p.vx = (dx / l) * 6.2; p.vz = (dz / l) * 6.2; }
+    p.stamina = Math.max(0, p.stamina - 0.04);
+  }
+
+  /** Jump to block: goes at the shooter; moving away when you jump is weak and slow. */
+  private blockJump(p: SimPlayer) {
+    let vy = PLAYER.jumpVel * (0.95 + p.attrs.defense * 0.08);
+    const t = this.blockTarget(p);
+    if (t) {
+      const dx = t.x - p.x, dz = t.z - p.z, dist = Math.hypot(dx, dz) || 1;
+      const ux = dx / dist, uz = dz / dist;
+      const away = -(p.vx * ux + p.vz * uz);
+      p.facing = Math.atan2(dz, dx);
+      if (away > 1.0) {
+        vy *= 0.78; p.vx *= 0.25; p.vz *= 0.25;
+        p.stumbleT = Math.max(p.stumbleT, 0.95);
+      } else {
+        const lunge = Math.min(2.4, Math.max(0, dist - 0.6) * 1.6);
+        p.vx = p.vx * 0.4 + ux * lunge; p.vz = p.vz * 0.4 + uz * lunge;
+      }
+    }
+    p.vy = vy;
+    p.action = "jump"; p.actionT = 0; p.jumpCd = 0.55;
+    p.stamina = Math.max(0, p.stamina - 0.04);
   }
 
   /** Who a jump should go at: an opponent holding or shooting the ball within 3.5 m. */
@@ -626,7 +698,11 @@ export class Game {
         if (a === "jumpshot" && p.actionT >= 0.26 && !p.airborne && !data.jumped) { p.vy = 3.1; p.y = 0.01; data.jumped = true; p.vx *= 0.3; p.vz *= 0.3; }
         if (a === "layup" && p.actionT >= 0.16 && !data.jumped) { p.vy = 3.7; p.y = 0.01; data.jumped = true; }
         if (a === "jumpshot" && !data.jumped) { p.vx *= 0.85; p.vz *= 0.85; }
-        if (!p.input.shoot && p.actionT > 0.08) {
+        if (!p.input.shoot && a === "jumpshot" && !data.jumped && (p.input.hold > 0 ? p.input.hold < 0.17 : p.actionT < 0.17)) {
+          // tap = PUMP FAKE: keep the ball, sell the shot
+          p.action = "pumpfake"; p.actionT = 0; p.meter = -1; p.contest = 0;
+          this.emit({ t: "move", by: p.id, kind: "pumpfake" });
+        } else if (!p.input.shoot && p.actionT > 0.08) {
           // trust the client's own hold time if it is close to what the server saw (absorbs network jitter)
           const h = p.input.hold;
           if (h > 0 && Math.abs(h - p.actionT) < 0.15) p.meter = h / dur;
@@ -659,12 +735,20 @@ export class Game {
       if (p.actionT > 0.38) p.action = "none";
     } else if (a === "pass") {
       if (p.actionT > 0.35) p.action = "none";
+    } else if (a === "drive") {
+      this.driveContact(p);
+      if (p.actionT > 0.55) p.action = "none";
     } else if (MOVE_ACTIONS.includes(a)) {
       if (a === "hesi" && p.actionData && p.actionT >= p.actionData.at && !p.actionData.done) {
         p.actionData.done = true;
         p.vx = p.actionData.burst.x * p.actionData.burst.s; p.vz = p.actionData.burst.z * p.actionData.burst.s;
       }
       if (p.actionT > 0.45) p.action = "none";
+    } else if (a === "pumpfake") {
+      p.vx *= 0.8; p.vz *= 0.8;
+      if (p.actionT > 0.38) p.action = "none";
+    } else if (a === "slide") {
+      if (p.actionT > 0.32) p.action = "none";
     } else if (a === "stumble") {
       if (p.stumbleT <= 0) p.action = "none";
     } else if (a === "celebrate") {
